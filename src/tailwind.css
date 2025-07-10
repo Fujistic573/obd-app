@@ -1,0 +1,12 @@
+/* The following directives require Tailwind CSS processing.
+   Make sure to build your CSS using Tailwind CLI or PostCSS with Tailwind plugin. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add this after Tailwind imports */
+html,
+body,
+#root {
+  height: 100%;
+}
