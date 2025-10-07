@@ -4,9 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Add this after Tailwind imports */
-html,
-body,
-#root {
+/* Optional custom rules */
+html, body, #root {
   height: 100%;
 }
