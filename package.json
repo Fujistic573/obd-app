@@ -15,11 +15,13 @@
   ],
   "author": "Nikolai",
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.1",
     "axios": "^1.12.2",
     "car-query": "^1.0.12",
     "openai": "^5.8.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-router-dom": "^7.10.1",
     "serve": "^14.2.4"
   },
   "devDependencies": {
