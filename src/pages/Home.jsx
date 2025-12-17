@@ -5,44 +5,37 @@ import ResultsDisplay from '../components/ResultsDisplay';
 import Spinner from '../components/Spinner';
 
 const generatePrompt = (vehicle, codes) => {
-    const isMultipleCodes = codes.includes(',') || codes.includes(' ');
+    const cleanedCodes = codes.split(/[,\s]+/).filter(c => c.trim()).join(', ');
 
-    const instructions = `
-    You are "AutoSpec AI", an expert automotive diagnostic assistant. Your tone is helpful, clear, and professional. You are speaking directly to a car owner who is likely not an expert. Avoid overly technical jargon where possible, or explain it simply.
+    return `You are an expert automotive diagnostic AI. Analyze these OBD2 codes for the vehicle below.
 
-    Your primary goal is to analyze the provided OBD2 error codes in the context of the specific vehicle and provide a safe, logical, and prioritized action plan.Also make sure to identify any relationships between the codes, prioritize them by severity, and provide a clear explanation of the most likely root cause.
+VEHICLE: ${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim || ''}
+ERROR CODES: ${cleanedCodes}
 
-    **CRITICAL INSTRUCTIONS:**
-    1.  **Analyze Relationships:** If multiple codes are provided, your FIRST step is to determine if they are related. For example, a vacuum leak (P0171/P0174) often causes misfires (P030x). Explicitly state this relationship if you find one.
-    2.  **Prioritize by Severity:** Always address the most severe or root-cause codes first in your explanation. A failing computer (P0606) is more critical than a gas cap leak (P0456).
-    3.  **Be Cautious:** If a code is ambiguous or could have many causes, state that clearly. If codes seem to contradict each other (e.g., P0171 "too lean" and P0172 "too rich"), identify this as a likely sensor or computer issue.
-    4.  **Provide a Disclaimer:** The final part of your explanation MUST include the sentence: "This is a diagnostic guide, not a replacement for a professional mechanic."
-    5. **Be careful with older cars that may not have OBD2 codes. If the vehicle is older than 1996, state that OBD2 codes may not be available and suggest checking for any visible issues or consulting a mechanic.
-    6. **Vehicle Context:** Use the provided vehicle context to tailor your analysis. If the vehicle is a common model with known issues, mention that explicitly.
-    7. **Search the web for common issues related to the vehicle make, model, and engine type. If you find any known issues, include them in your analysis and mention the sources.
-    **VEHICLE CONTEXT:**
-    *   Year: ${vehicle.year}
-    *   Make: ${vehicle.make}
-    *   Model: ${vehicle.model}
-    *   Trim Details: ${vehicle.trim || 'Not specified'}
-    * *   Multiple Codes Detected: ${isMultipleCodes}
+IMPORTANT: Respond with ONLY valid JSON, no extra text, no markdown. Use this exact format:
 
-    **ERROR CODES TO ANALYZE:**
-    ${codes}
+{
+  "diagnosis": {
+    "explanation": "Clear explanation of the problem. End with: This is a diagnostic guide, not a replacement for a professional mechanic.",
+    "commonality": "State if this is common for this specific vehicle.",
+    "suggestedFixes": [
+      {
+        "name": "Check Gas Cap",
+        "difficulty": 1,
+        "description": "Inspect and tighten or replace the gas cap.",
+        "isMostLikely": true
+      },
+      {
+        "name": "Replace Oxygen Sensor",
+        "difficulty": 3,
+        "description": "Test and replace faulty O2 sensor if needed.",
+        "isMostLikely": false
+      }
+    ]
+  }
+}
 
-    **RESPONSE FORMAT:**
-    Provide your response exclusively in a clean, minified JSON format. The JSON object must have a single top-level key named "diagnosis". The value of "diagnosis" should be an object containing:
-    1.  "explanation": A string explaining the codes, their relationships, and the most likely root cause, ending with the mandatory disclaimer.
-    2.  "commonality": A string stating if this is a common problem for this specific vehicle model and engine. Be specific if possible (e.g., "Yes, the intake manifold gaskets on this V6 are a known failure point.").
-    3.  "suggestedFixes": An array of 3-5 objects, ordered from MOST LIKELY/SIMPLEST fix to LEAST LIKELY/MOST COMPLEX. Each object must have:
-        *   "name": (string) A short name for the fix (e.g., "Check Gas Cap Seal").
-        *   "difficulty": (number 1-5) A rating from 1 (very easy) to 5 (mechanic required).
-        *   "description": (string) A simple, one-sentence description of the fix.
-        *   "isMostLikely": (boolean) A flag set to 'true' for the single most probable fix to try first.
-        
-  `;
-
-    return instructions;
+Provide 3-5 fixes ordered by likelihood. Mark ONLY ONE as isMostLikely: true.`;
 };
 
 function Home() {
@@ -63,50 +56,174 @@ function Home() {
             setError("Please enter at least one error code.");
             return;
         }
+
+        if (!vehicle.year || !vehicle.make || !vehicle.model) {
+            setError("Please select your vehicle year, make, and model.");
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setDiagnosis(null);
 
-        const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
         const prompt = generatePrompt(vehicle, codes);
 
         try {
+            console.log("Sending request to Gemini API...");
+
+            // Add timeout to prevent infinite loading
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
             const response = await fetch(API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.4,
+                        topK: 32,
+                        topP: 1,
+                        maxOutputTokens: 2048,
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_HARASSMENT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_HATE_SPEECH",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            threshold: "BLOCK_NONE"
+                        },
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_NONE"
+                        }
+                    ]
+                }),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
+
+            console.log("Response status:", response.status);
+
             if (!response.ok) {
                 const errorBody = await response.json();
+                console.error("API Error:", JSON.stringify(errorBody, null, 2));
                 const errorMessage = errorBody?.error?.message || `API Error: ${response.statusText}`;
+
                 if (response.status === 429) {
-                    throw new Error("You have hit the free usage limit. Please wait a minute and try again.");
+                    throw new Error("Rate limit reached. Please wait a moment and try again.");
                 }
+                if (response.status === 403) {
+                    throw new Error("Invalid API key. Please check your .env file.");
+                }
+                if (response.status === 400) {
+                    throw new Error("Bad request. Please check your error codes and try again.");
+                }
+
                 throw new Error(`${errorMessage} (Status: ${response.status})`);
             }
+
             const data = await response.json();
-            if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-                throw new Error("AI did not return a valid response structure.");
+            console.log("Full API Response:", data);
+
+            if (!data.candidates || data.candidates.length === 0) {
+                throw new Error("AI returned no response. Please try again.");
             }
-            const rawText = data.candidates[0].content.parts[0].text;
-            const cleanJsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsedDiagnosis = JSON.parse(cleanJsonText);
-            if (parsedDiagnosis?.diagnosis) {
-                setDiagnosis(parsedDiagnosis.diagnosis);
-            } else {
-                throw new Error("AI response structure missing 'diagnosis' key.");
+
+            const candidate = data.candidates[0];
+
+            // Check for blocked content
+            if (candidate.finishReason === "SAFETY") {
+                throw new Error("Response was blocked by safety filters. Try different error codes.");
             }
+
+            if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+                throw new Error("AI response is empty. Please try again.");
+            }
+
+            const rawText = candidate.content.parts[0].text;
+            console.log("Raw AI Response:", rawText);
+
+            if (!rawText || rawText.trim().length === 0) {
+                throw new Error("AI returned empty text. Please try again.");
+            }
+
+            // More aggressive JSON extraction
+            let cleanJsonText = rawText.trim();
+
+            // Remove all markdown
+            cleanJsonText = cleanJsonText.replace(/```json\n?/gi, '');
+            cleanJsonText = cleanJsonText.replace(/```\n?/g, '');
+            cleanJsonText = cleanJsonText.replace(/^[^{]*/, ''); // Remove anything before first {
+            cleanJsonText = cleanJsonText.replace(/[^}]*$/, ''); // Remove anything after last }
+
+            console.log("Cleaned text for parsing:", cleanJsonText);
+
+            let parsedDiagnosis;
+            try {
+                parsedDiagnosis = JSON.parse(cleanJsonText);
+            } catch (parseError) {
+                console.error("JSON Parse Error:", parseError);
+                console.error("Failed to parse:", cleanJsonText);
+                throw new Error("AI response is not valid JSON. Please try again with different codes.");
+            }
+
+            if (!parsedDiagnosis?.diagnosis) {
+                console.error("Missing diagnosis key:", parsedDiagnosis);
+                throw new Error("AI response is missing diagnosis data. Please try again.");
+            }
+
+            const diag = parsedDiagnosis.diagnosis;
+
+            // Validate required fields
+            if (!diag.explanation || !diag.commonality || !Array.isArray(diag.suggestedFixes)) {
+                console.error("Incomplete diagnosis:", diag);
+                throw new Error("AI response is incomplete. Please try again.");
+            }
+
+            if (diag.suggestedFixes.length === 0) {
+                throw new Error("AI returned no suggested fixes. Please try again.");
+            }
+
+            // Ensure at least one fix is marked as most likely
+            if (!diag.suggestedFixes.some(f => f.isMostLikely)) {
+                diag.suggestedFixes[0].isMostLikely = true;
+            }
+
+            console.log("Successfully parsed diagnosis:", diag);
+            setDiagnosis(diag);
+
         } catch (e) {
-            setError(`Diagnosis failed: ${e.message || 'An unknown error occurred.'}`);
+            console.error("Diagnosis Error:", e);
+
+            if (e.name === 'AbortError') {
+                setError('Request timed out. The API is taking too long to respond. Please try again.');
+            } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+                setError('Network error. Please check your internet connection and API key.');
+            } else {
+                setError(e.message || 'An unknown error occurred. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="w-full max-w-3xl mx-auto p-4">
-            <header className="mb-8 text-center">
+        <div className="w-full max-w-3xl mx-auto px-4 pb-4">
+            <header className="mb-8 text-center pt-8">
                 <h1 className="text-3xl sm:text-4xl font-bold text-cyan-400 mb-2">OBD.ai</h1>
                 <p className="text-slate-400 text-lg">Personalized Check Engine Light Diagnostics</p>
             </header>
@@ -116,8 +233,20 @@ function Home() {
                     <VehicleSelector vehicle={vehicle} onVehicleChange={setVehicle} />
                     <ErrorCodeInput codes={codes} onCodesChange={setCodes} />
                 </div>
-                <button onClick={handleDiagnose} disabled={loading} className="mt-6 w-full bg-cyan-500 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg text-lg flex items-center justify-center">
-                    {loading ? <Spinner /> : 'Diagnose My Car'}
+
+                <button
+                    onClick={handleDiagnose}
+                    disabled={loading}
+                    className="mt-6 w-full bg-cyan-500 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg text-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                    {loading ? (
+                        <>
+                            <Spinner />
+                            <span>Analyzing...</span>
+                        </>
+                    ) : (
+                        'Diagnose My Car'
+                    )}
                 </button>
             </main>
 

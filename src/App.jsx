@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import PrivateRoute from './components/PrivateRoute';
 import Home from './pages/Home';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsConditions from './pages/TermsConditions';
@@ -20,7 +21,7 @@ function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/my-vehicles" element={<MyVehicles />} />
+          <Route path="/my-vehicles" element={<PrivateRoute><MyVehicles /></PrivateRoute>} />
         </Routes>
 
         <footer className="bg-slate-800 py-6 mt-12 border-t border-slate-700">
