@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import VehicleSelector from '../components/VehicleSelector';
 
 const MyVehicles = () => {
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [session, setSession] = useState(null);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [editingVehicle, setEditingVehicle] = useState(null);
     const navigate = useNavigate();
 
-    const [newVehicle, setNewVehicle] = useState({ year: '', make: '', model: '', nickname: '' });
+    const [newVehicle, setNewVehicle] = useState({ year: '', make: '', model: '', trim: '' });
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -58,14 +60,14 @@ const MyVehicles = () => {
                         year: newVehicle.year,
                         make: newVehicle.make,
                         model: newVehicle.model,
-                        nickname: newVehicle.nickname || null
+                        trim: newVehicle.trim || null
                     }
                 ])
                 .select();
 
             if (error) throw error;
             setVehicles([...data, ...vehicles]);
-            setNewVehicle({ year: '', make: '', model: '', nickname: '' });
+            setNewVehicle({ year: '', make: '', model: '', trim: '' });
             setShowAddForm(false);
         } catch (error) {
             alert('Error adding vehicle: ' + error.message);
@@ -86,6 +88,51 @@ const MyVehicles = () => {
         } catch (error) {
             alert('Error removing vehicle: ' + error.message);
         }
+    };
+
+    const handleEditVehicle = (vehicle) => {
+        setEditingVehicle(vehicle);
+        setNewVehicle({
+            year: vehicle.year,
+            make: vehicle.make,
+            model: vehicle.model,
+            trim: vehicle.trim || ''
+        });
+        setShowAddForm(true);
+    };
+
+    const handleUpdateVehicle = async (e) => {
+        e.preventDefault();
+        if (!session || !editingVehicle) return;
+
+        try {
+            const { data, error } = await supabase
+                .from('vehicles')
+                .update({
+                    year: newVehicle.year,
+                    make: newVehicle.make,
+                    model: newVehicle.model,
+                    trim: newVehicle.trim || null
+                })
+                .eq('id', editingVehicle.id)
+                .select();
+
+            if (error) throw error;
+            setVehicles(vehicles.map(v => v.id === editingVehicle.id ? data[0] : v));
+            setNewVehicle({ year: '', make: '', model: '', trim: '' });
+            setEditingVehicle(null);
+            setShowAddForm(false);
+        } catch (error) {
+            alert('Error updating vehicle: ' + error.message);
+        }
+    };
+
+    const handleFormSubmit = editingVehicle ? handleUpdateVehicle : handleAddVehicle;
+
+    const handleCancelForm = () => {
+        setShowAddForm(false);
+        setEditingVehicle(null);
+        setNewVehicle({ year: '', make: '', model: '', trim: '' });
     };
 
     const handleSignOut = async () => {
@@ -148,58 +195,15 @@ const MyVehicles = () => {
                 {/* Add Vehicle Form (Modal) */}
                 {showAddForm && (
                     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                        <div className="bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-slate-700">
-                            <h2 className="text-2xl font-bold text-cyan-400 mb-6">Add New Vehicle</h2>
-                            <form onSubmit={handleAddVehicle} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">Nickname (Optional)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g., Daily Driver, Weekend Cruiser"
-                                        value={newVehicle.nickname}
-                                        onChange={(e) => setNewVehicle({ ...newVehicle, nickname: e.target.value })}
-                                        className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 transition-colors"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">Year*</label>
-                                        <input
-                                            type="text"
-                                            placeholder="2024"
-                                            value={newVehicle.year}
-                                            onChange={(e) => setNewVehicle({ ...newVehicle, year: e.target.value })}
-                                            className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 transition-colors"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">Make*</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Ford"
-                                            value={newVehicle.make}
-                                            onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
-                                            className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 transition-colors"
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">Model*</label>
-                                    <input
-                                        type="text"
-                                        placeholder="F-150"
-                                        value={newVehicle.model}
-                                        onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
-                                        className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 transition-colors"
-                                        required
-                                    />
-                                </div>
+                        <div className="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full border border-slate-700">
+                            <h2 className="text-2xl font-bold text-cyan-400 mb-6">{editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}</h2>
+                            <form onSubmit={handleFormSubmit} className="space-y-4">
+                                <VehicleSelector vehicle={newVehicle} onVehicleChange={setNewVehicle} />
+
                                 <div className="flex gap-3 pt-4">
                                     <button
                                         type="button"
-                                        onClick={() => setShowAddForm(false)}
+                                        onClick={handleCancelForm}
                                         className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition-colors"
                                     >
                                         Cancel
@@ -208,7 +212,7 @@ const MyVehicles = () => {
                                         type="submit"
                                         className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-cyan-500/30"
                                     >
-                                        Add Vehicle
+                                        {editingVehicle ? 'Update Vehicle' : 'Add Vehicle'}
                                     </button>
                                 </div>
                             </form>
@@ -248,21 +252,27 @@ const MyVehicles = () => {
                                 >
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="text-4xl">🚙</div>
-                                        <button
-                                            onClick={() => handleDeleteVehicle(vehicle.id)}
-                                            className="text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                                            title="Remove vehicle"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    {vehicle.nickname && (
-                                        <div className="text-cyan-400 font-semibold text-sm mb-2">
-                                            {vehicle.nickname}
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleEditVehicle(vehicle)}
+                                                className="text-slate-500 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Edit vehicle"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteVehicle(vehicle.id)}
+                                                className="text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Remove vehicle"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
                                         </div>
-                                    )}
+                                    </div>
                                     <h3 className="text-xl font-bold text-white mb-1">
                                         {vehicle.year} {vehicle.make}
                                     </h3>

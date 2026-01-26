@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 import VehicleSelector from '../components/VehicleSelector';
 import ErrorCodeInput from '../components/ErrorCodeInput';
 import ResultsDisplay from '../components/ResultsDisplay';
@@ -39,6 +40,10 @@ Provide 3-5 fixes ordered by likelihood. Mark ONLY ONE as isMostLikely: true.`;
 };
 
 function Home() {
+    const [session, setSession] = useState(null);
+    const [savedVehicles, setSavedVehicles] = useState([]);
+    const [selectedVehicleId, setSelectedVehicleId] = useState('');
+
     const [vehicle, setVehicle] = useState({
         year: '2024',
         make: 'Ford',
@@ -50,6 +55,63 @@ function Home() {
     const [diagnosis, setDiagnosis] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    useEffect(() => {
+        // Check auth and fetch vehicles
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            if (session) {
+                fetchSavedVehicles(session.user.id);
+            }
+        });
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+            if (session) {
+                fetchSavedVehicles(session.user.id);
+            } else {
+                setSavedVehicles([]);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const fetchSavedVehicles = async (userId) => {
+        try {
+            const { data, error } = await supabase
+                .from('vehicles')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setSavedVehicles(data || []);
+        } catch (error) {
+            console.error('Error fetching vehicles:', error.message);
+        }
+    };
+
+    const handleVehicleSelect = (e) => {
+        const vehicleId = e.target.value;
+        setSelectedVehicleId(vehicleId);
+
+        if (vehicleId === 'manual') {
+            setVehicle({ year: '', make: '', model: '', trim: '' });
+        } else if (vehicleId) {
+            const selected = savedVehicles.find(v => v.id.toString() === vehicleId);
+            if (selected) {
+                setVehicle({
+                    year: selected.year,
+                    make: selected.make,
+                    model: selected.model,
+                    trim: selected.trim || ''
+                });
+            }
+        }
+    };
 
     const handleDiagnose = async () => {
         if (!codes.trim()) {
@@ -66,7 +128,7 @@ function Home() {
         setError(null);
         setDiagnosis(null);
 
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
         const prompt = generatePrompt(vehicle, codes);
 
@@ -229,10 +291,36 @@ function Home() {
             </header>
 
             <main className="bg-slate-800 p-6 rounded-lg shadow-xl">
+                {/* Saved Vehicles Dropdown - Only show if logged in and has vehicles */}
+                {session && savedVehicles.length > 0 && (
+                    <div className="mb-6 pb-6 border-b border-slate-700">
+                        <label className="block text-sm font-medium text-cyan-300 mb-2">
+                            🚗 My Garage - Quick Select
+                        </label>
+                        <select
+                            value={selectedVehicleId}
+                            onChange={handleVehicleSelect}
+                            className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                        >
+                            <option value="">Select a saved vehicle...</option>
+                            {savedVehicles.map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {v.year} {v.make} {v.model}
+                                </option>
+                            ))}
+                            <option value="manual">— Enter Manually —</option>
+                        </select>
+                    </div>
+                )}
+
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <VehicleSelector vehicle={vehicle} onVehicleChange={setVehicle} />
+                    <div className={selectedVehicleId && selectedVehicleId !== 'manual' ? 'opacity-50 pointer-events-none' : ''}>
+                        <VehicleSelector vehicle={vehicle} onVehicleChange={setVehicle} />
+                    </div>
                     <ErrorCodeInput codes={codes} onCodesChange={setCodes} />
                 </div>
+
 
                 <button
                     onClick={handleDiagnose}
