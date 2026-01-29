@@ -128,7 +128,7 @@ function Home() {
         setError(null);
         setDiagnosis(null);
 
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
         const prompt = generatePrompt(vehicle, codes);
 
@@ -183,19 +183,13 @@ function Home() {
             if (!response.ok) {
                 const errorBody = await response.json();
                 console.error("API Error:", JSON.stringify(errorBody, null, 2));
+                console.error("Status Code:", response.status);
+                console.error("Status Text:", response.statusText);
+
                 const errorMessage = errorBody?.error?.message || `API Error: ${response.statusText}`;
 
-                if (response.status === 429) {
-                    throw new Error("Rate limit reached. Please wait a moment and try again.");
-                }
-                if (response.status === 403) {
-                    throw new Error("Invalid API key. Please check your .env file.");
-                }
-                if (response.status === 400) {
-                    throw new Error("Bad request. Please check your error codes and try again.");
-                }
-
-                throw new Error(`${errorMessage} (Status: ${response.status})`);
+                // Show the FULL error message to user for debugging
+                throw new Error(`${errorMessage} (HTTP ${response.status})`);
             }
 
             const data = await response.json();
