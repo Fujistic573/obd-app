@@ -20,6 +20,7 @@
     "axios": "^1.12.2",
     "car-query": "^1.0.12",
     "openai": "^5.8.2",
+    "qrcode.react": "^4.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.10.1",

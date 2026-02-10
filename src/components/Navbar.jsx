@@ -41,7 +41,10 @@ const Navbar = () => {
                                 <Link to="/about" className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">About</Link>
                                 <Link to="/contact" className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Contact</Link>
                                 {session && (
-                                    <Link to="/my-vehicles" className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">My Garage</Link>
+                                    <>
+                                        <Link to="/my-vehicles" className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">My Garage</Link>
+                                        <Link to="/security" className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Security</Link>
+                                    </>
                                 )}
                             </div>
                         </div>

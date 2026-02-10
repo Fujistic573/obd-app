@@ -8,6 +8,7 @@ import Contact from './pages/Contact';
 import About from './pages/About';
 import Login from './pages/Login';
 import MyVehicles from './pages/MyVehicles';
+import Security from './pages/Security';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/my-vehicles" element={<PrivateRoute><MyVehicles /></PrivateRoute>} />
+          <Route path="/security" element={<PrivateRoute><Security /></PrivateRoute>} />
         </Routes>
 
         <footer className="bg-slate-800 py-6 mt-12 border-t border-slate-700">
