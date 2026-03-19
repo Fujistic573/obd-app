@@ -62,7 +62,7 @@ const VehicleSelector = ({ vehicle, onVehicleChange }) => {
           } else {
             setTrims(['Standard']); // Fallback
           }
-        } catch (parseError) {
+        } catch {
           console.error("Failed to parse trims JSON:", text.substring(0, 100));
           setTrims(['Standard']); // Fallback to a default option
         }
